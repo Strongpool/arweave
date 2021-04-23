@@ -26,6 +26,8 @@
 
       defaultPackage = self.packages."${system}".arweave;
 
+      devShell = import ./shell.nix { inherit pkgs; };
+
     });
 
 }
