@@ -576,6 +576,8 @@ static ERL_NIF_TERM bulk_hash_fast_nif(ErlNifEnv* envPtr, int argc, const ERL_NI
 
 static ERL_NIF_TERM hash_fast_verify_nif(ErlNifEnv* envPtr, int argc, const ERL_NIF_TERM argv[])
 {
+    // TODO pass in max difficulty seen
+
 	randomx_vm *vmPtr = NULL;
 	int jitEnabled, largePagesEnabled, hardwareAESEnabled;
 	randomx_flags flags;
@@ -638,6 +640,8 @@ static ERL_NIF_TERM hash_fast_verify_nif(ErlNifEnv* envPtr, int argc, const ERL_
 		enif_rwlock_runlock(statePtr->lockPtr);
 		return solution_tuple(envPtr, hashTerm);
 	}
+
+	// TODO return {false, Hash} if greater than max difficulty seen
 
 	randomx_destroy_vm(vmPtr);
 	enif_rwlock_runlock(statePtr->lockPtr);

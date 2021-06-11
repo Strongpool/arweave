@@ -105,15 +105,18 @@ bulk_hash_fast(
 
 -ifdef(DEBUG).
 hash_fast_verify(FastState, Diff, Preimage) ->
+    %% TODO pass in max difficulty seen
 	Hash = crypto:hash(sha256, [FastState | Preimage]),
 	case binary:decode_unsigned(Hash, big) > Diff of
 		true ->
 			{true, Hash};
+		%% TODO return {false, Hash} if greater than max difficulty seen
 		false ->
 			false
 	end.
 -else.
 hash_fast_verify(FastState, Diff, Preimage) ->
+    %% TODO pass in max difficulty seen
 	DiffBinary = binary:encode_unsigned(Diff, big),
 	hash_fast_verify_nif(
 		FastState,

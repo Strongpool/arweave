@@ -450,6 +450,7 @@ reschedule_timestamp_refresh(S = #state{
 
 %% @doc Start the workers and return the new state.
 start_miners(S) ->
+	%% TODO include best SPoRA difficulty and hash in ETS table
 	ets:insert(mining_state, [
 		{started_at, os:timestamp()},
 		{sporas, 0},
@@ -562,6 +563,7 @@ server(
 	receive
 		%% Stop the mining process and all the workers.
 		stop ->
+			%% TODO write best SPoRA to disk
 			stop_miners(S),
 			log_spora_performance();
 		{solution, Nonce, H0, Timestamp, Hash} ->
@@ -723,6 +725,7 @@ small_weave_hashing_thread(Args) ->
 		H0 = Hasher(<< Nonce/binary, BDS/binary >>),
 		TimestampBinary = << Timestamp:(?TIMESTAMP_FIELD_SIZE_LIMIT * 8) >>,
 		Preimage = [H0, PrevH, TimestampBinary, <<>>],
+		%% TODO compare hash to best hash in ETS table and save if better
 		case StageTwoHasher(Diff, Preimage) of
 			{true, Hash} ->
 				ets:update_counter(mining_state, sporas, 1),
@@ -758,6 +761,7 @@ hashing_thread(S, Type) ->
 				when Timestamp2 + 19 > Timestamp ->
 			TimestampBinary = << Timestamp2:(?TIMESTAMP_FIELD_SIZE_LIMIT * 8) >>,
 			Preimage = [H0, PrevH, TimestampBinary, Chunk],
+			%% TODO compare hash to best hash in ETS table and save if better
 			case StageTwoHasher(Diff2, Preimage) of
 				{true, Hash} ->
 					Parent ! {solution, Nonce, H0, Timestamp2, Hash};
