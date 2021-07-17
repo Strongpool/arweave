@@ -450,12 +450,12 @@ reschedule_timestamp_refresh(S = #state{
 
 %% @doc Start the workers and return the new state.
 start_miners(S) ->
-	%% TODO include best SPoRA difficulty and hash in ETS table
 	ets:insert(mining_state, [
 		{started_at, os:timestamp()},
 		{sporas, 0},
 		{kibs, 0},
-		{recall_bytes_computed, 0}
+		{recall_bytes_computed, 0},
+		{best_hash, <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>} %% TODO is there better syntax for this?
 	]),
 	start_hashing_threads(S).
 
@@ -563,7 +563,9 @@ server(
 	receive
 		%% Stop the mining process and all the workers.
 		stop ->
-			%% TODO write best SPoRA to disk
+			%% TODO write BestHash to disk
+			[{_, BestHash}] = ets:lookup(mining_state, best_hash),
+			ar:console("Best hash: ~p~n", [BestHash]),
 			stop_miners(S),
 			log_spora_performance();
 		{solution, Nonce, H0, Timestamp, Hash} ->
@@ -725,11 +727,14 @@ small_weave_hashing_thread(Args) ->
 		H0 = Hasher(<< Nonce/binary, BDS/binary >>),
 		TimestampBinary = << Timestamp:(?TIMESTAMP_FIELD_SIZE_LIMIT * 8) >>,
 		Preimage = [H0, PrevH, TimestampBinary, <<>>],
-		%% TODO compare hash to best hash in ETS table and save if better
 		case StageTwoHasher(Diff, Preimage) of
 			{true, Hash} ->
 				ets:update_counter(mining_state, sporas, 1),
 				Parent ! {solution, Nonce, H0, Timestamp, Hash},
+				small_weave_hashing_thread(Args);
+			{false, BestHash} ->
+				% TODO send BestHash to another process so best WSPoRA can be kept
+				ets:insert(mining_state, {best_hash, BestHash}),
 				small_weave_hashing_thread(Args);
 			false ->
 				small_weave_hashing_thread(Args)
@@ -761,10 +766,13 @@ hashing_thread(S, Type) ->
 				when Timestamp2 + 19 > Timestamp ->
 			TimestampBinary = << Timestamp2:(?TIMESTAMP_FIELD_SIZE_LIMIT * 8) >>,
 			Preimage = [H0, PrevH, TimestampBinary, Chunk],
-			%% TODO compare hash to best hash in ETS table and save if better
 			case StageTwoHasher(Diff2, Preimage) of
 				{true, Hash} ->
 					Parent ! {solution, Nonce, H0, Timestamp2, Hash};
+				{false, NewBestHash} ->
+					% TODO send BestHash to another process so best WSPoRA can be kept
+					ets:insert(mining_state, {best_hash, NewBestHash}),
+					ok;
 				false ->
 					ok
 			end,
@@ -929,7 +937,8 @@ prepare_randomx(Height) ->
 				end,
 			StageTwoHasher =
 				fun(Diff, Preimage) ->
-					ar_mine_randomx:hash_fast_verify(FastState, Diff, Preimage)
+					[{_, BestHash}] = ets:lookup(mining_state, best_hash),
+					ar_mine_randomx:hash_fast_verify(FastState, Diff, BestHash, Preimage)
 				end,
 			SmallWeaveHasher =
 				fun(Preimage) ->
