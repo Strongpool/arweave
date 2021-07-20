@@ -563,9 +563,15 @@ server(
 	receive
 		%% Stop the mining process and all the workers.
 		stop ->
-			%% TODO write BestHash to disk
+			%% TODO refactor and cleanup
+			{ok, Config} = application:get_env(arweave, config),
+			WsporasDir = filename:join(Config#config.data_dir, 'wsporas') ++ "/",
+			filelib:ensure_dir(WsporasDir),
+			WsporaFile = filename:join(WsporasDir, io_lib:format("~B.json", [Height])),
 			[{_, BestHash}] = ets:lookup(mining_state, best_hash),
-			ar:console("Best hash: ~p~n", [BestHash]),
+			EncodedBestHash = ar_util:encode(BestHash),
+			file:write_file(WsporaFile, [iolist_to_binary(jiffy:encode({[{hash, EncodedBestHash}]}))]),
+			ar:console("Best hash: ~s~n", [EncodedBestHash]),
 			stop_miners(S),
 			log_spora_performance();
 		{solution, Nonce, H0, Timestamp, Hash} ->
