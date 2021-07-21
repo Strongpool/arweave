@@ -7,7 +7,7 @@
 	init_light/1, hash_light/2,
 	release_state/1,
 	bulk_hash_fast/13,
-	hash_fast_verify/3
+	hash_fast_verify/4
 ]).
 
 %% These exports are required for the DEBUG mode, where these functions are unused.
@@ -16,7 +16,7 @@
 	init_light_nif/3, hash_light_nif/5,
 	init_fast_nif/4, hash_fast_nif/5, bulk_hash_fast_nif/13,
 	release_state_nif/1, jit/0, large_pages/0, hardware_aes/0,
-	hash_fast_verify_nif/6
+	hash_fast_verify_nif/7
 ]).
 
 -include_lib("arweave/include/ar.hrl").
@@ -104,20 +104,27 @@ bulk_hash_fast(
 -endif.
 
 -ifdef(DEBUG).
-hash_fast_verify(FastState, Diff, Preimage) ->
+hash_fast_verify(FastState, Diff, BestHash, Preimage) ->
 	Hash = crypto:hash(sha256, [FastState | Preimage]),
 	case binary:decode_unsigned(Hash, big) > Diff of
 		true ->
 			{true, Hash};
 		false ->
-			false
-	end.
+			case binary:decode_unsigned(Hash, big) > binary:decode_unsigned(BestHash, big) of
+				true ->
+					{false, Hash};
+				false ->
+					false
+			end
+    end.
 -else.
-hash_fast_verify(FastState, Diff, Preimage) ->
+hash_fast_verify(FastState, Diff, BestHash, Preimage) ->
+    %% TODO pass in max difficulty seen
 	DiffBinary = binary:encode_unsigned(Diff, big),
 	hash_fast_verify_nif(
 		FastState,
 		DiffBinary,
+		BestHash,
 		Preimage,
 		jit(),
 		large_pages(),
@@ -211,7 +218,7 @@ bulk_hash_fast_nif(
 ) ->
 	erlang:nif_error(nif_not_loaded).
 
-hash_fast_verify_nif(_State, _Diff, _Preimage, _JIT, _LargePages, _HardwareAES) ->
+hash_fast_verify_nif(_State, _Diff, _BestHash, _Preimage, _JIT, _LargePages, _HardwareAES) ->
 	erlang:nif_error(nif_not_loaded).
 
 hash_light_nif(_State, _Data, _JIT, _LargePages, _HardwareAES) ->
