@@ -53,8 +53,11 @@ test_randomx_backwards_compatibility() ->
 		0,
 		0
 	),
-	Diff = binary:encode_unsigned(binary:decode_unsigned(Hash, big) - 1),
-    {true, Hash} = ar_mine_randomx:hash_fast_verify_nif(State, Diff, Input, 0, 0, 0),
-    false = ar_mine_randomx:hash_fast_verify_nif(State, Hash, Input, 0, 0, 0),
+	LowerHash = binary:encode_unsigned(binary:decode_unsigned(Hash, big) - 1),
+	LowerDiff = LowerHash,
+    EqualDiff = Hash,
+    {true, Hash} = ar_mine_randomx:hash_fast_verify_nif(State, LowerDiff, LowerHash, Input, 0, 0, 0),
+    {false, Hash} = ar_mine_randomx:hash_fast_verify_nif(State, EqualDiff, LowerHash, Input, 0, 0, 0),
+    false = ar_mine_randomx:hash_fast_verify_nif(State, EqualDiff, Hash, Input, 0, 0, 0),
     {ok, LightState} = ar_mine_randomx:init_light_nif(Key, 0, 0),
     ?assertEqual({ok, ExpectedHash}, ar_mine_randomx:hash_light_nif(LightState, Input, 0, 0, 0)).

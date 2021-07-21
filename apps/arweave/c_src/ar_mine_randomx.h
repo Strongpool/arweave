@@ -52,6 +52,7 @@ static ERL_NIF_TERM hash_fast_verify_nif(ErlNifEnv*, int, const ERL_NIF_TERM [])
 static ERL_NIF_TERM release_state_nif(ErlNifEnv*, int, const ERL_NIF_TERM []);
 
 static ERL_NIF_TERM solution_tuple(ErlNifEnv*, ERL_NIF_TERM);
+static ERL_NIF_TERM best_hash_tuple(ErlNifEnv*, ERL_NIF_TERM);
 static ERL_NIF_TERM ok_tuple(ErlNifEnv*, ERL_NIF_TERM);
 static ERL_NIF_TERM ok_tuple2(ErlNifEnv*, ERL_NIF_TERM, ERL_NIF_TERM);
 static ERL_NIF_TERM error_tuple(ErlNifEnv*, ERL_NIF_TERM);
