@@ -15,7 +15,7 @@ static ErlNifFunc nif_funcs[] = {
 	{"hash_fast_nif", 5, hash_fast_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
 	{"hash_light_nif", 5, hash_light_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
 	{"bulk_hash_fast_nif", 13, bulk_hash_fast_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-	{"hash_fast_verify_nif", 6, hash_fast_verify_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+	{"hash_fast_verify_nif", 7, hash_fast_verify_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
 	{"randomx_encrypt_chunk_nif", 7, randomx_encrypt_chunk_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
 	{"randomx_decrypt_chunk_nif", 8, randomx_decrypt_chunk_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
 	{"hash_fast_long_with_entropy_nif", 6, hash_fast_long_with_entropy_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
@@ -588,14 +588,15 @@ static ERL_NIF_TERM bulk_hash_fast_nif(ErlNifEnv* envPtr, int argc, const ERL_NI
 
 static ERL_NIF_TERM hash_fast_verify_nif(ErlNifEnv* envPtr, int argc, const ERL_NIF_TERM argv[])
 {
+
 	randomx_vm *vmPtr = NULL;
 	int jitEnabled, largePagesEnabled, hardwareAESEnabled;
 	randomx_flags flags;
 	unsigned char hashPtr[RANDOMX_HASH_SIZE];
 	struct state* statePtr;
-	ErlNifBinary difficulty, inputData;
+	ErlNifBinary difficulty, inputData, bestHash;
 
-	if (argc != 6) {
+	if (argc != 7) {
 		return enif_make_badarg(envPtr);
 	}
 
@@ -608,16 +609,22 @@ static ERL_NIF_TERM hash_fast_verify_nif(ErlNifEnv* envPtr, int argc, const ERL_
 	if (difficulty.size != RANDOMX_HASH_SIZE) {
 		return enif_make_badarg(envPtr);
 	}
-	if (!enif_inspect_iolist_as_binary(envPtr, argv[2], &inputData)) {
+	if (!enif_inspect_binary(envPtr, argv[2], &bestHash)) {
 		return enif_make_badarg(envPtr);
 	}
-	if (!enif_get_int(envPtr, argv[3], &jitEnabled)) {
+	if (bestHash.size != RANDOMX_HASH_SIZE) {
 		return enif_make_badarg(envPtr);
 	}
-	if (!enif_get_int(envPtr, argv[4], &largePagesEnabled)) {
+	if (!enif_inspect_iolist_as_binary(envPtr, argv[3], &inputData)) {
 		return enif_make_badarg(envPtr);
 	}
-	if (!enif_get_int(envPtr, argv[5], &hardwareAESEnabled)) {
+	if (!enif_get_int(envPtr, argv[4], &jitEnabled)) {
+		return enif_make_badarg(envPtr);
+	}
+	if (!enif_get_int(envPtr, argv[5], &largePagesEnabled)) {
+		return enif_make_badarg(envPtr);
+	}
+	if (!enif_get_int(envPtr, argv[6], &hardwareAESEnabled)) {
 		return enif_make_badarg(envPtr);
 	}
 
@@ -649,6 +656,13 @@ static ERL_NIF_TERM hash_fast_verify_nif(ErlNifEnv* envPtr, int argc, const ERL_
 		randomx_destroy_vm(vmPtr);
 		enif_rwlock_runlock(statePtr->lockPtr);
 		return solution_tuple(envPtr, hashTerm);
+	}
+
+	if (validate_hash(hashPtr, bestHash.data) > 0) {
+		ERL_NIF_TERM hashTerm = make_output_binary(envPtr, hashPtr, RANDOMX_HASH_SIZE);
+		randomx_destroy_vm(vmPtr);
+		enif_rwlock_runlock(statePtr->lockPtr);
+		return best_hash_tuple(envPtr, hashTerm);
 	}
 
 	randomx_destroy_vm(vmPtr);
@@ -1197,6 +1211,10 @@ static ERL_NIF_TERM release_state_nif(ErlNifEnv* envPtr, int argc, const ERL_NIF
 
 static ERL_NIF_TERM solution_tuple(ErlNifEnv* envPtr, ERL_NIF_TERM hashTerm) {
 	return enif_make_tuple2(envPtr, enif_make_atom(envPtr, "true"), hashTerm);
+}
+
+static ERL_NIF_TERM best_hash_tuple(ErlNifEnv* envPtr, ERL_NIF_TERM hashTerm) {
+	return enif_make_tuple2(envPtr, enif_make_atom(envPtr, "false"), hashTerm);
 }
 
 static ERL_NIF_TERM ok_tuple(ErlNifEnv* envPtr, ERL_NIF_TERM term)
