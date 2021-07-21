@@ -606,7 +606,8 @@ start_miners(S) ->
 		{started_at, os:timestamp()},
 		{sporas, 0},
 		{bytes_read, 0},
-		{recall_bytes_computed, 0}
+		{recall_bytes_computed, 0},
+		{best_hash, <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>} %% TODO is there better syntax for this?
 	]),
 	start_hashing_threads(S).
 
@@ -695,6 +696,18 @@ server(
 	receive
 		%% Stop the mining process and all the workers.
 		stop ->
+			%% TODO refactor and cleanup
+			{ok, Config} = application:get_env(arweave, config),
+			WsporasDir = filename:join(Config#config.data_dir, 'strongpool/proofs') ++ "/",
+			filelib:ensure_dir(WsporasDir),
+			WsporaFile = filename:join(WsporasDir, io_lib:format("~B.json", [Height])),
+			[{_, BestHash}] = ets:lookup(mining_state, best_hash),
+			EncodedBestHash = ar_util:encode(BestHash),
+			EncodedMiningAddr = ar_util:encode(Config#config.mining_addr),
+			file:write_file(WsporaFile, [iolist_to_binary(jiffy:encode({[{height, Height},
+																		 {hash, EncodedBestHash},
+																		 {reward_addr, EncodedMiningAddr}]}))]),
+			ar:console("Best hash: ~s~n", [EncodedBestHash]),
 			stop_miners(S),
 			log_spora_performance();
 		{solution, Nonce, H0, Timestamp, Hash} ->
@@ -851,6 +864,10 @@ small_weave_hashing_thread(Args) ->
 				ets:update_counter(mining_state, sporas, 1),
 				Parent ! {solution, Nonce, H0, Timestamp, Hash},
 				small_weave_hashing_thread(Args);
+			{false, BestHash} ->
+				% TODO send BestHash to another process so best WSPoRA can be kept
+				ets:insert(mining_state, {best_hash, BestHash}),
+				small_weave_hashing_thread(Args);
 			false ->
 				small_weave_hashing_thread(Args)
 		end
@@ -874,6 +891,10 @@ hashing_thread(S, Type) ->
 			case StageTwoHasher(Diff2, Preimage) of
 				{true, Hash} ->
 					Parent ! {solution, Nonce, H0, Timestamp2, Hash};
+				{false, NewBestHash} ->
+					% TODO send BestHash to another process so best WSPoRA can be kept
+					ets:insert(mining_state, {best_hash, NewBestHash}),
+					ok;
 				false ->
 					ok
 			end,
@@ -988,7 +1009,8 @@ prepare_randomx(Height) ->
 				end,
 			StageTwoHasher =
 				fun(Diff, Preimage) ->
-					ar_mine_randomx:hash_fast_verify(FastState, Diff, Preimage)
+					[{_, BestHash}] = ets:lookup(mining_state, best_hash),
+					ar_mine_randomx:hash_fast_verify(FastState, Diff, BestHash, Preimage)
 				end,
 			{ok, {StageOneHasher, StageTwoHasher}};
 		{state, {light, _}} ->
