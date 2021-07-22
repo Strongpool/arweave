@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -e
+
+[ -n "$DEBUG" ] && set -x
+
+cd /arweave
+
+./erts-11.2.2.3/bin/epmd -daemon
+
+./bin/start data_dir /data "$@"
