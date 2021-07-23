@@ -4,6 +4,10 @@ set -e
 
 [ -n "$DEBUG" ] && set -x
 
+if [ -n "$EGRESS_RATE_LIMIT" ]; then
+    tc qdisc add dev eth0 root tbf rate "${EGRESS_RATE_LIMIT}" latency 100ms burst 100k
+fi
+
 cd /arweave
 
 ./erts-12.2.1/bin/epmd -daemon
