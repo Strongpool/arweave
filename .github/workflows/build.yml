@@ -29,6 +29,8 @@ jobs:
 
       - name: Checkout repo
         uses: actions/checkout@v2
+        with:
+          submodules: recursive
 
       ##
       ## Setup
