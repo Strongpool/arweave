@@ -19,6 +19,10 @@ COPY scripts/ ./scripts/
 
 RUN ./rebar3 as prod release
 
+FROM builder AS test
+
+RUN epmd -daemon && ./bin/test
+
 FROM debian:buster
 
 RUN apt-get -y update && apt-get -y install \
