@@ -44,7 +44,7 @@ jobs:
       ##
 
       - name: Run tests
-        run: DOCKER_BUILDKIT=1 docker --target test build .
+        run: DOCKER_BUILDKIT=1 docker build --target test .
 
       ##
       ## Image build and push setup
