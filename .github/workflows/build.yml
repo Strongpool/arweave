@@ -1,0 +1,93 @@
+---
+
+name: Build
+on:
+  push:
+    branches:
+      - 2.5.0.0-strongpool
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILDKIT: 1
+    steps:
+      ##
+      ## Start notification
+      ##
+
+      - name: Notify Slack start
+        uses: voxmedia/github-action-slack-notify-build@v1
+        id: slack
+        with:
+          channel: ${{ secrets.SLACK_BUILDS_CHANNEL }}
+          status: STARTING
+          color: warning
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
+
+      ##
+      ## Checkout repo
+      ##
+
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      ##
+      ## Run tests
+      ##
+
+      - name: Run tests
+        run: docker build --target test .
+
+      ##
+      ## Slack completion notifications
+      ##
+
+      # Updates existing message from the first step
+      - name: Notify Slack success
+        if: success()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
+        uses: voxmedia/github-action-slack-notify-build@v1
+        with:
+          message_id: ${{ steps.slack.outputs.message_id }}
+          channel: ${{ secrets.SLACK_BUILDS_CHANNEL }}
+          status: SUCCESS
+          color: good
+
+      # Updates existing message from the first step
+      - name: Notify Slack failure
+        if: failure()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
+        uses: voxmedia/github-action-slack-notify-build@v1
+        with:
+          message_id: ${{ steps.slack.outputs.message_id }}
+          channel: ${{ secrets.SLACK_BUILDS_CHANNEL }}
+          status: FAILED
+          color: danger
+
+      # For notification purposes, sends to a separate channel on failure
+      - name: Notify Slack failure (build failures channel)
+        if: failure()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
+        uses: voxmedia/github-action-slack-notify-build@v1
+        with:
+          channel: ${{ secrets.SLACK_BUILD_FAILURES_CHANNEL }}
+          status: FAILED
+          color: danger
+
+      ##
+      ## Discord completion notifications
+      ##
+
+      - name: Notify Discord failure
+        uses: rjstone/discord-webhook-notify@v1
+        if: failure()
+        with:
+          severity: error
+          details: Build failed!
+          webhookUrl: ${{ secrets.DISCORD_BUILD_FAILURES_WEBHOOK }}

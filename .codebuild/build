@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -ex
+
+skip-ci && exit 0
+already-succeeded && exit 0
+
+docker build --target test .
+docker build -t ghcr.io/strongpool/arweave:$IMAGE_TAG .
+docker push ghcr.io/strongpool/arweave:$IMAGE_TAG
+
+record-success
