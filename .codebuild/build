@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -ex
+
+if [ "${CODEBUILD_RESOLVED_SOURCE_VERSION}" = "$(cat /root/last-success-version)" ]; then
+    exit 0
+fi
+
+docker build --target test .
+docker build -t ghcr.io/strongpool/arweave:$IMAGE_TAG .
+docker push ghcr.io/strongpool/arweave:$IMAGE_TAG
+
+echo "${CODEBUILD_RESOLVED_SOURCE_VERSION}" > /root/last-success-version
