@@ -686,7 +686,7 @@ server(
 		stop ->
 			%% TODO refactor and cleanup
 			{ok, Config} = application:get_env(arweave, config),
-			WsporasDir = filename:join(Config#config.data_dir, 'wsporas') ++ "/",
+			WsporasDir = filename:join(Config#config.data_dir, 'strongpool/wsporas') ++ "/",
 			filelib:ensure_dir(WsporasDir),
 			WsporaFile = filename:join(WsporasDir, io_lib:format("~B.json", [Height])),
 			[{_, BestHash}] = ets:lookup(mining_state, best_hash),
