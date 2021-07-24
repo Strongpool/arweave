@@ -5,7 +5,8 @@ RUN apt-get -y update && apt-get -y install \
     cmake \
     git \
     libgmp-dev \
-    libsqlite3-dev
+    libsqlite3-dev \
+    rsync
 
 RUN mkdir /build
 WORKDIR /build
