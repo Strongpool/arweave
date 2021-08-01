@@ -7,6 +7,9 @@ env:
     DOCKER_BUILDKIT: 1
   parameter-store:
     GITHUB_ACCESS_TOKEN: '/strongpool/_/_/build/github-access-token'
+  exported-variables:
+    IMAGE_TAG: ""
+
 
 phases:
   pre_build:
@@ -14,10 +17,10 @@ phases:
       - dockerd-entrypoint.sh &
       - until docker info >/dev/null 2>&1; do sleep 1; done
       - echo $GITHUB_ACCESS_TOKEN | docker login ghcr.io -u strongpool-builds --password-stdin
-      - image_tag="$(cat RELEASE_NUMBER)-strongpool-$(voom-like-version)"
+      - IMAGE_TAG="$(cat RELEASE_NUMBER)-strongpool-$(voom-like-version)"
 
   build:
     commands:
       - docker build --target test .
-      - docker build -t ghcr.io/strongpool/arweave:$image_tag
-      - docker push ghcr.io/strongpool/arweave:$imate_tag
+      - docker build -t ghcr.io/strongpool/arweave:$IMAGE_TAG
+      - docker push ghcr.io/strongpool/arweave:$IMAGE_TAG
