@@ -8,8 +8,7 @@ env:
   parameter-store:
     GITHUB_ACCESS_TOKEN: '/strongpool/_/_/build/github-access-token'
   exported-variables:
-    IMAGE_TAG: ""
-
+    - IMAGE_TAG
 
 phases:
   pre_build:
