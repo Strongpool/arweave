@@ -1,4 +1,4 @@
-FROM erlang:23.3.4.4 AS builder
+FROM ghcr.io/strongpool/erlang:23.3.4.4 AS builder
 
 RUN apt-get -y update && apt-get -y install \
     build-essential \
