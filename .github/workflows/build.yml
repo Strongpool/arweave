@@ -40,30 +40,6 @@ jobs:
         run: DOCKER_BUILDKIT=1 docker build --target test .
 
       ##
-      ## Build and push container image
-      ##
-
-      - name: Log in to GitHub container registry
-        uses: docker/login-action@v1
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Add Voom version release number to environment
-        run: |
-          echo "VOOM_VERSION=$(./voom-like-version)" >>${GITHUB_ENV}
-          echo "RELEASE_NUMBER=$(cat RELEASE_NUMBER)" >>${GITHUB_ENV}
-
-      - name: Build and push container image
-        uses: docker/build-push-action@v2
-        with:
-          push: true
-          tags: |
-            ghcr.io/strongpool/arweave:${{ env.RELEASE_NUMBER }}-strongpool-${{ env.VOOM_VERSION }}
-            ghcr.io/strongpool/arweave:latest
-
-      ##
       ## Slack completion notifications
       ##
 
