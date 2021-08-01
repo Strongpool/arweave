@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILDKIT: 1
     steps:
       ##
       ## Start notification
@@ -37,7 +39,7 @@ jobs:
       ##
 
       - name: Run tests
-        run: DOCKER_BUILDKIT=1 docker build --target test .
+        run: docker build --target test .
 
       ##
       ## Slack completion notifications
