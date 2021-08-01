@@ -23,4 +23,4 @@ phases:
     commands:
       - docker build --target test .
       - docker build -t ghcr.io/strongpool/arweave:$IMAGE_TAG .
-      - docker push ghcr.io/strongpool/arweave:$IMAGE_TAG .
+      - docker push ghcr.io/strongpool/arweave:$IMAGE_TAG
