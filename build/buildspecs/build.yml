@@ -17,6 +17,7 @@ phases:
       - until docker info >/dev/null 2>&1; do sleep 1; done
       - echo $GITHUB_ACCESS_TOKEN | docker login ghcr.io -u strongpool-builds --password-stdin
       - IMAGE_TAG="$(cat RELEASE_NUMBER)-strongpool-$(voom-like-version)"
+      - git submodule update --init --recursive
 
   build:
     commands:
