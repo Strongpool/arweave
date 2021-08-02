@@ -23,7 +23,7 @@ FROM builder AS test
 
 RUN epmd -daemon && ./bin/test
 
-FROM debian:buster
+FROM ghcr.io/strongpool/debian:buster
 
 RUN apt-get -y update && apt-get -y install \
     libssl1.1 \
