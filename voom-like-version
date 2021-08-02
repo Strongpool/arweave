@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+# Derived from https://github.com/LonoCloud/voom-util/blob/e7498a81c93fdcb28a359500a590e60866dfdff3/voom-like-version.sh
+
+set -e
+
+[ -n "$DEBUG" ] && set -x
+
+echo $(date --date="$(git log -1 --pretty=%ci)" "+%Y%m%d_%H%M%S")-g$(git log -1 --pretty=%h)$(test -z "$(git status --short)" || echo _DIRTY)
