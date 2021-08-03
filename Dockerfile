@@ -26,6 +26,7 @@ RUN epmd -daemon && ./bin/test
 FROM ghcr.io/strongpool/debian:buster
 
 RUN apt-get -y update && apt-get -y install \
+    curl \
     libssl1.1 \
     && rm -rf /var/lib/apt/lists/*
 
