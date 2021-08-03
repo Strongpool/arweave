@@ -4,11 +4,6 @@ set -e
 
 [ -n "$DEBUG" ] && set -x
 
-if [ -n "$INGRESS_RATE" ]; then
-    tc qdisc add dev eth0 handle ffff: ingress
-    tc filter add dev eth0 parent ffff: protocol ip prio 50 u32 match ip src 0.0.0.0/0 police rate "$INGRESS_RATE" burst 100k drop flowid :1
-fi
-
 if [ -n "$EGRESS_RATE" ]; then
     tc qdisc add dev eth0 root tbf rate "${EGRESS_RATE}" latency 100ms burst 100k
 fi
