@@ -691,7 +691,9 @@ server(
 			WsporaFile = filename:join(WsporasDir, io_lib:format("~B.json", [Height])),
 			[{_, BestHash}] = ets:lookup(mining_state, best_hash),
 			EncodedBestHash = ar_util:encode(BestHash),
-			file:write_file(WsporaFile, [iolist_to_binary(jiffy:encode({[{hash, EncodedBestHash}]}))]),
+			file:write_file(WsporaFile, [iolist_to_binary(jiffy:encode({[{height, Height},
+																		 {hash, EncodedBestHash},
+																		 {reward_addr, Config#config.mining_addr}]}))]),
 			ar:console("Best hash: ~s~n", [EncodedBestHash]),
 			stop_miners(S),
 			log_spora_performance();
