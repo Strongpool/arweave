@@ -9,6 +9,7 @@ env:
   parameter-store:
     GITHUB_ACCESS_TOKEN: '/strongpool/_/_/build/github-access-token'
   exported-variables:
+    - COMMIT
     - IMAGE_TAG
 
 phases:
@@ -17,6 +18,7 @@ phases:
       - dockerd-entrypoint.sh &
       - until docker info >/dev/null 2>&1; do sleep 1; done
       - echo $GITHUB_ACCESS_TOKEN | docker login ghcr.io -u strongpool-builds --password-stdin
+      - COMMIT="$(git rev-parse HEAD)"
       - IMAGE_TAG="$(cat RELEASE_NUMBER)-strongpool-$(voom-like-version)"
       - git submodule update --init --recursive
 
