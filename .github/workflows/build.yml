@@ -4,7 +4,7 @@ name: Build
 on:
   push:
     branches:
-      - 2.4.2.0-strongpool
+      - 2.4.3.0-strongpool
 jobs:
   build:
     runs-on: ubuntu-latest
