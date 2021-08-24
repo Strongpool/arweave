@@ -90,12 +90,4 @@ jobs:
         with:
           severity: error
           details: Build failed!
-          webhookUrl: ${{ secrets.DISCORD_DEV_LOG_WEBHOOK }}
-
-      - name: Notify Discord canceled
-        uses: rjstone/discord-webhook-notify@v1
-        if: cancelled()
-        with:
-          severity: warn
-          details: Build canceled!
-          webhookUrl: ${{ secrets.DISCORD_DEV_LOG_WEBHOOK }}
+          webhookUrl: ${{ secrets.DISCORD_BUILD_FAILURES_WEBHOOK }}
