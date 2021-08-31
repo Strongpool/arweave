@@ -19,7 +19,7 @@ jobs:
         uses: voxmedia/github-action-slack-notify-build@v1
         id: slack
         with:
-          channel: builds
+          channel: ${{ secrets.SLACK_BUILDS_CHANNEL }}
           status: STARTING
           color: warning
         env:
@@ -53,7 +53,7 @@ jobs:
         uses: voxmedia/github-action-slack-notify-build@v1
         with:
           message_id: ${{ steps.slack.outputs.message_id }}
-          channel: builds
+          channel: ${{ secrets.SLACK_BUILDS_CHANNEL }}
           status: SUCCESS
           color: good
 
@@ -65,7 +65,7 @@ jobs:
         uses: voxmedia/github-action-slack-notify-build@v1
         with:
           message_id: ${{ steps.slack.outputs.message_id }}
-          channel: builds
+          channel: ${{ secrets.SLACK_BUILDS_CHANNEL }}
           status: FAILED
           color: danger
 
@@ -76,7 +76,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
         uses: voxmedia/github-action-slack-notify-build@v1
         with:
-          channel: build-failures
+          channel: ${{ secrets.SLACK_BUILD_FAILURES_CHANNEL }}
           status: FAILED
           color: danger
 
