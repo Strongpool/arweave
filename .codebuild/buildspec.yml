@@ -16,7 +16,7 @@ phases:
   pre_build:
     commands:
       - start-docker
-      - echo $GITHUB_ACCESS_TOKEN | docker login ghcr.io -u $GITHUB_USER --password-stdin
+      - ghcr-login
       - COMMIT="$(git rev-parse HEAD)"
       - IMAGE_TAG="$(cat RELEASE_NUMBER)-strongpool-$(voom-like-version)"
       - git submodule update --init --recursive
