@@ -15,8 +15,7 @@ env:
 phases:
   pre_build:
     commands:
-      - dockerd-entrypoint.sh &
-      - until docker info >/dev/null 2>&1; do sleep 1; done
+      - start-docker
       - echo $GITHUB_ACCESS_TOKEN | docker login ghcr.io -u $GITHUB_USER --password-stdin
       - COMMIT="$(git rev-parse HEAD)"
       - IMAGE_TAG="$(cat RELEASE_NUMBER)-strongpool-$(voom-like-version)"
@@ -28,4 +27,4 @@ phases:
 
 cache:
   paths:
-    - '/root/last-success-version'
+    - /root/last-success-version
