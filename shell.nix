@@ -7,6 +7,7 @@ mkShell {
     gcc
     gmp
     gnumake
+    openssl
     rebar3
     openssl
   ];
