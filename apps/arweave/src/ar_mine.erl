@@ -607,7 +607,7 @@ start_miners(S) ->
 		{sporas, 0},
 		{bytes_read, 0},
 		{recall_bytes_computed, 0},
-		{best_hash, <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>}, %% TODO is there better syntax for this?
+		{best_hash, <<0:256>>},
 		{best_proof, #{}}
 	]),
 	start_hashing_threads(S).
@@ -697,23 +697,22 @@ server(
 	receive
 		%% Stop the mining process and all the workers.
 		stop ->
-			%% TODO refactor and cleanup
-			{ok, Config} = application:get_env(arweave, config),
-			WsporasDir = filename:join(Config#config.data_dir, 'strongpool/proofs') ++ "/",
-			filelib:ensure_dir(WsporasDir),
-			WsporaFile = filename:join(WsporasDir, io_lib:format("~B.json", [Height])),
 			[{_, BestHash}] = ets:lookup(mining_state, best_hash),
-			%% TODO replace with case?
-			if
-				BestHash /= <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>> ->
+ 			case BestHash /= <<0:256>> of
+				true ->
+					%% Construct proof file name
+					{ok, Config} = application:get_env(arweave, config),
+					WsporasDir = filename:join(Config#config.data_dir, 'strongpool/proofs') ++ "/",
+					filelib:ensure_dir(WsporasDir),
+					WsporaFile = filename:join(WsporasDir, io_lib:format("~B.json", [Height])),
+					%% Write proof to file
 					[{_, BestProof}] = ets:lookup(mining_state, best_proof),
 					JsonBestProof = ar_serialize:jsonify(ar_serialize:block_to_json_struct(BestProof)),
 					file:write_file(WsporaFile, [JsonBestProof]),
 					EncodedBestHash = ar_util:encode(BestHash),
-					ar:console("Best hash: ~s~n", [EncodedBestHash]);
-				true ->
-					%% TODO better log message
-					ar:console("No best hash found.~n")
+					ar:console("Best round hash: ~s~n", [EncodedBestHash]);
+				false ->
+					ar:console("No candidate solutions found.~n")
 			end,
 			stop_miners(S),
 			log_spora_performance();
@@ -731,8 +730,7 @@ server(
 									{h0, ar_util:encode(H0)}, {byte, RecallByte}]),
 							server(S);
 						SPoA ->
-							%% TODO either remove validation or use zero difficulty
-							case validate_spora({BDS, Nonce, Timestamp, Height, B#block.diff,
+							case validate_spora({BDS, Nonce, Timestamp, Height, 0,
 									PrevH, SearchSpaceUpperBound, B#block.packing_2_5_threshold,
 									B#block.strict_data_split_threshold, SPoA, BI}) of
 								{true, _, Hash} ->
@@ -748,12 +746,6 @@ server(
 									ets:insert(mining_state, {best_proof, B3}),
 									server(S);
 								_ ->
-									B2 =
-										B#block{
-											poa = SPoA,
-											hash = Hash,
-											nonce = Nonce
-										},
 									?LOG_ERROR([
 										{event, miner_produced_invalid_spora},
 										{hash, ar_util:encode(Hash)},
@@ -764,10 +756,6 @@ server(
 										{height, Height},
 										{search_space_upper_bound, SearchSpaceUpperBound}
 									]),
-									IndepHash = ar_weave:indep_hash(BDS, B2#block.hash, B2#block.nonce, SPoA),
-									B3 = B2#block{ indep_hash = IndepHash },
-									ets:insert(mining_state, {best_hash, Hash}),
-									ets:insert(mining_state, {best_proof, B3}),
 									server(S)
 							end
 					end
