@@ -456,6 +456,9 @@ handle(<<"POST">>, [<<"chunk">>], Req, Pid) ->
 handle(<<"POST">>, [<<"block">>], Req, Pid) ->
 	post_block(request, {Req, Pid}, erlang:timestamp());
 
+handle(<<"POST">>, [<<"strongpool">>, <<"validate_proof">>], Req, Pid) ->
+	post_strongpool_validate_proof(request, {Req, Pid});
+
 %% Generate a wallet and receive a secret key identifying it.
 %% Requires internal_api_secret startup option to be set.
 %% WARNING: only use it if you really really know what you are doing.
@@ -1385,6 +1388,21 @@ request_to_struct_with_blockshadow(Req, BlockJSON) ->
 			{error, {Exception, Reason}, Req}
 	end.
 
+strongpool_validate_proof_request_to_struct_with_blockshadow(Req, BlockJSON) ->
+	try
+		JSONB = ar_serialize:dejsonify(BlockJSON),
+		BShadow = ar_serialize:json_struct_to_block(JSONB),
+		{ok, BShadow, Req}
+	catch
+		Exception:Reason:Stacktrace ->
+			?LOG_ERROR(
+				"event: error parsing block, type: ~p, exception: ~p,"
+				" stacktrace: ~p",
+				[Exception, Reason, Stacktrace]
+			),
+			{error, {Exception, Reason}, Req}
+	end.
+
 %% @doc Generate and return an informative JSON object regarding the state of the node.
 return_info(Req) ->
 	{Time, Current} =
@@ -1599,6 +1617,130 @@ post_block(post_block, {BShadow, OrigPeer, _BDS}, Req, ReceiveTimestamp) ->
 	ar_events:send(block, {new, BShadow, OrigPeer}),
 	{200, #{}, <<"OK">>, Req}.
 
+post_strongpool_validate_proof(request, {Req, Pid}) ->
+	OrigPeer = ar_http_util:arweave_peer(Req),
+	case ar_blacklist_middleware:is_peer_banned(OrigPeer) of
+		not_banned ->
+			case {ar_node:is_joined(), check_internal_api_secret(Req)} of
+				{true, pass} ->
+					post_strongpool_validate_proof(read_blockshadow, OrigPeer, {Req, Pid});
+				{false, _} ->
+					%% The node is not ready to validate and accept blocks.
+					%% If the network adopts this block, ar_poller will catch up.
+					{503, #{}, <<"Not joined.">>, Req};
+				{true, {reject, {Status, Headers, Body}}} ->
+					{Status, Headers, Body, Req}
+			end;
+		banned ->
+			{403, #{}, <<"IP address blocked due to previous request.">>, Req}
+	end.
+post_strongpool_validate_proof(read_blockshadow, OrigPeer, {Req, Pid}) ->
+	HeaderBlockHashKnown =
+		case cowboy_req:header(<<"arweave-block-hash">>, Req, not_set) of
+			not_set ->
+				false;
+			EncodedBH ->
+				case ar_util:safe_decode(EncodedBH) of
+					{ok, BH} when byte_size(BH) =< 48 ->
+						ar_ignore_registry:member(BH);
+					_ ->
+						false
+				end
+		end,
+	case HeaderBlockHashKnown of
+		true ->
+			{208, <<"Block already processed.">>, Req};
+		false ->
+			case read_complete_body(Req, Pid) of
+				{ok, BlockJSON, Req2} ->
+					case strongpool_validate_proof_request_to_struct_with_blockshadow(Req2, BlockJSON) of
+						{error, {_, _}, ReadReq} ->
+							{400, #{}, <<"Invalid block.">>, ReadReq};
+						{ok, BShadow, ReadReq} ->
+							case byte_size(BShadow#block.indep_hash) > 48 of
+								true ->
+									{400, #{}, <<"Invalid block.">>, ReadReq};
+								false ->
+									post_strongpool_validate_proof(
+										check_indep_hash_processed,
+										{BShadow, OrigPeer},
+										ReadReq
+									)
+							end
+					end;
+				{error, body_size_too_large} ->
+					{413, #{}, <<"Payload too large">>, Req}
+			end
+	end;
+post_strongpool_validate_proof(check_indep_hash_processed, {BShadow, OrigPeer}, Req) ->
+	case ar_ignore_registry:member(BShadow#block.indep_hash) of
+		true ->
+			{208, <<"Block already processed.">>, Req};
+		false ->
+			post_strongpool_validate_proof(check_indep_hash, {BShadow, OrigPeer}, Req)
+	end;
+post_strongpool_validate_proof(check_indep_hash, {BShadow, OrigPeer}, Req) ->
+	BH = BShadow#block.indep_hash,
+	PrevH = BShadow#block.previous_block,
+	case ar_node:get_block_shadow_from_cache(PrevH) of
+		not_found ->
+			%% We have not seen the previous block yet - might happen if two
+			%% successive blocks are distributed at the same time. Do not
+			%% ban the peer as the block might be valid. If the network adopts
+			%% this block, ar_poller will catch up.
+			{412, #{}, <<>>, Req};
+		#block{ height = PrevHeight } = PrevB ->
+			case BShadow#block.height == PrevHeight + 1 of
+				false ->
+					{400, #{}, <<"Invalid block.">>, Req};
+				true ->
+					case catch compute_hash(BShadow, PrevHeight + 1) of
+						{BDS, BH} ->
+							ar_ignore_registry:add_temporary(BH, 5000),
+							post_strongpool_validate_proof(check_pow, {BShadow, OrigPeer, BDS, PrevB}, Req);
+						_ ->
+							post_block_reject_warn(BShadow, check_indep_hash, OrigPeer),
+							ar_blacklist_middleware:ban_peer(OrigPeer, ?BAD_POW_BAN_TIME),
+							{400, #{}, <<"Invalid Block Hash">>, Req}
+					end
+			end
+	end;
+%% Note! Checking PoW should be as cheap as possible. All slow steps should
+%% be after the PoW check to reduce the possibility of doing a DOS attack on
+%% the network.
+post_strongpool_validate_proof(check_pow, {BShadow, OrigPeer, BDS, PrevB}, Req) ->
+	Nonce = BShadow#block.nonce,
+	#block{ indep_hash = PrevH, height = PrevHeight } = PrevB,
+	Height = PrevHeight + 1,
+	MaybeValid =
+		case Height >= ar_fork:height_2_4() of
+			true ->
+				case ar_node:get_recent_search_space_upper_bound_by_prev_h(PrevH) of
+					not_found ->
+						{reply, {412, #{}, <<>>, Req}};
+					SearchSpaceUpperBound ->
+						validate_strongpool_spora_pow(BShadow, PrevB, BDS, SearchSpaceUpperBound)
+				end;
+			false ->
+				case ar_mine:validate(BDS, Nonce, BShadow#block.diff, Height) of
+					{invalid, _} ->
+						false;
+					{valid, _} ->
+						true
+				end
+		end,
+	case MaybeValid of
+		{reply, Reply} ->
+			Reply;
+		true ->
+			%% TODO log validation
+			{200, #{}, <<"OK">>, Req};
+		false ->
+			post_block_reject_warn(BShadow, check_pow, OrigPeer),
+			ar_blacklist_middleware:ban_peer(OrigPeer, ?BAD_POW_BAN_TIME),
+			{400, #{}, <<"Invalid Block Proof of Work">>, Req}
+	end.
+
 compute_hash(B, Height) ->
 	BDS = ar_block:generate_block_data_segment(B),
 	Hash = B#block.hash,
@@ -1651,6 +1793,51 @@ validate_spora_pow(B, PrevB, BDS, SearchSpaceUpperBound) ->
 					false;
 				SolutionHash ->
 					ar_mine:validate(SolutionHash, B#block.diff, Height)
+						andalso SolutionHash == B#block.hash
+			end
+	end.
+
+validate_strongpool_spora_pow(B, PrevB, BDS, SearchSpaceUpperBound) ->
+	#block{ height = PrevHeight, indep_hash = PrevH } = PrevB,
+	#block{ height = Height, nonce = Nonce, timestamp = Timestamp,
+			poa = #poa{ chunk = Chunk } = SPoA } = B,
+	Root = ar_block:compute_hash_list_merkle(PrevB),
+	case {Root, PrevHeight + 1} == {B#block.hash_list_merkle, Height} of
+		false ->
+			false;
+		true ->
+			{H0, Entropy} = ar_mine:spora_h0_with_entropy(BDS, Nonce, Height),
+			ComputeSolutionHash =
+				case ar_mine:pick_recall_byte(H0, PrevH, SearchSpaceUpperBound) of
+					{error, weave_size_too_small} ->
+						case SPoA == #poa{} of
+							false ->
+								false;
+							true ->
+								ar_mine:spora_solution_hash(PrevH, Timestamp, H0, Chunk, Height)
+						end;
+					{ok, RecallByte} ->
+						PackingThreshold = ar_block:get_packing_threshold(PrevB,
+								SearchSpaceUpperBound),
+						case verify_packing_threshold(B, PackingThreshold) of
+							false ->
+								false;
+							true ->
+								case RecallByte >= PackingThreshold of
+									true ->
+										ar_mine:spora_solution_hash_with_entropy(PrevH,
+												Timestamp, H0, Chunk, Entropy, Height);
+									false ->
+										ar_mine:spora_solution_hash(PrevH, Timestamp, H0, Chunk,
+												Height)
+								end
+						end
+				end,
+			case ComputeSolutionHash of
+				false ->
+					false;
+				SolutionHash ->
+					ar_mine:validate(SolutionHash, 0, Height)
 						andalso SolutionHash == B#block.hash
 			end
 	end.
