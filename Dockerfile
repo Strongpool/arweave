@@ -27,6 +27,7 @@ FROM ghcr.io/strongpool/debian:bullseye
 
 RUN apt-get -y update && apt-get -y install \
     curl \
+    iproute2 \
     libssl1.1 \
     && rm -rf /var/lib/apt/lists/*
 
